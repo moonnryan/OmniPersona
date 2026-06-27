@@ -662,12 +662,13 @@ private struct KeyboardDismissGestureInstaller: UIViewRepresentable {
 private enum SystemVoiceCatalog {
     static var options: [SystemVoiceOption] {
         let voices = AVSpeechSynthesisVoice.speechVoices()
+        var usedIdentifiers = Set<String>()
         return preferredSlots.compactMap { slot in
-            guard let voice = bestVoice(for: slot, in: voices) else { return nil }
-            return SystemVoiceOption(
-                id: voice.identifier,
-                title: "\(slot.title) · \(voice.name)\(qualitySuffix(voice.quality))"
-            )
+            guard let voice = bestVoice(for: slot, in: voices, excluding: usedIdentifiers) else {
+                return nil
+            }
+            usedIdentifiers.insert(voice.identifier)
+            return SystemVoiceOption(id: voice.identifier, title: "\(slot.title) · \(voice.name)\(qualitySuffix(voice.quality))")
         }
     }
 
@@ -687,11 +688,31 @@ private enum SystemVoiceCatalog {
         "Whisper", "Wobble", "Zarvox"
     ]
 
-    private static func bestVoice(for slot: VoiceSlot, in voices: [AVSpeechSynthesisVoice]) -> AVSpeechSynthesisVoice? {
-        let languageVoices = voices.filter { $0.language == slot.language && !excludedVoiceNames.contains($0.name) }
-        let genderMatched = languageVoices.filter { $0.gender == slot.gender }
-        let candidates = genderMatched.isEmpty ? languageVoices : genderMatched
+    private static func bestVoice(for slot: VoiceSlot, in voices: [AVSpeechSynthesisVoice], excluding usedIdentifiers: Set<String>) -> AVSpeechSynthesisVoice? {
+        let languageVoices = voices.filter {
+            $0.language == slot.language &&
+            !usedIdentifiers.contains($0.identifier) &&
+            !excludedVoiceNames.contains($0.name)
+        }
+        let genderMatched = languageVoices.filter { matches($0, gender: slot.gender) }
+        let candidates = slot.requiresGenderMatch ? genderMatched : (genderMatched.isEmpty ? languageVoices : genderMatched)
+        guard !candidates.isEmpty else { return nil }
         return candidates.max { score($0, for: slot) < score($1, for: slot) }
+    }
+
+    private static func matches(_ voice: AVSpeechSynthesisVoice, gender: AVSpeechSynthesisVoiceGender) -> Bool {
+        if voice.gender == gender {
+            return true
+        }
+        let searchable = "\(voice.name) \(voice.identifier)".lowercased()
+        switch gender {
+        case .female:
+            return searchable.contains("female") || searchable.contains("woman") || searchable.contains("voice 2")
+        case .male:
+            return searchable.contains("male") || searchable.contains("man") || searchable.contains("voice 1")
+        default:
+            return false
+        }
     }
 
     private static func score(_ voice: AVSpeechSynthesisVoice, for slot: VoiceSlot) -> Int {
@@ -729,5 +750,6 @@ private enum SystemVoiceCatalog {
         let title: String
         let language: String
         let gender: AVSpeechSynthesisVoiceGender
+        var requiresGenderMatch: Bool { gender == .male }
     }
 }
