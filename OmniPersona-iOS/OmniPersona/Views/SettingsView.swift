@@ -19,16 +19,18 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("模型接口") {
+            Section {
                 Picker("后端", selection: $store.settings.endpoints.backend) {
                     ForEach(ChatBackend.pickerOrder) { backend in
                         Text(backend.title).tag(backend)
                     }
                 }
                 endpointFields
+            } header: {
+                CardEdgeSectionHeader("模型接口")
             }
 
-            Section("推理") {
+            Section {
                 Toggle("启用思考模式", isOn: $store.settings.generation.enableThinking)
                 DisclosureGroup("参数", isExpanded: $showAdvancedGeneration) {
                     SliderRow(title: "Temperature", value: $store.settings.generation.temperature, range: 0...2)
@@ -36,9 +38,11 @@ struct SettingsView: View {
                     Stepper("Max tokens: \(store.settings.generation.maxTokens)", value: $store.settings.generation.maxTokens, in: 128...8192, step: 128)
                     Stepper("多轮记忆: \(store.settings.generation.contextTurns)", value: $store.settings.generation.contextTurns, in: 0...30)
                 }
+            } header: {
+                CardEdgeSectionHeader("推理")
             }
 
-            Section("TTS") {
+            Section {
                 Picker("引擎", selection: $store.settings.tts.engine) {
                     ForEach(TTSEngineKind.pickerOrder) { engine in
                         Text(engine.title).tag(engine)
@@ -112,6 +116,8 @@ struct SettingsView: View {
                     voiceManagementControls
                     savedCloneVoices
                 }
+            } header: {
+                CardEdgeSectionHeader("TTS")
             }
         }
         .navigationTitle("设置")
@@ -422,6 +428,22 @@ struct SettingsView: View {
         } set: { value in
             store.settings.tts.voice = value.trimmingCharacters(in: .whitespacesAndNewlines)
         }
+    }
+}
+
+private struct CardEdgeSectionHeader: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 19, weight: .semibold))
+            .foregroundStyle(.primary.opacity(0.86))
+            .textCase(.none)
+            .offset(x: -16)
     }
 }
 

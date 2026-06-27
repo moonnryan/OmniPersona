@@ -10,6 +10,9 @@ struct LocalLlamaService {
     }
 
     func stream(messages: [ChatMessage], settings: AppSettings) -> AsyncThrowingStream<String, Error> {
+#if !OMNIPERSONA_ENABLE_LLAMA_BRIDGE
+        return singleDeltaStream("当前构建未启用本地 llama.cpp bridge。请运行脚本生成并接入 iOS XCFramework，或切换到 OpenAI 兼容接口。")
+#else
         guard let selected = settings.localModels.first(where: { $0.isSelected }),
               let localPath = selected.llmLocalPath,
               FileManager.default.fileExists(atPath: localPath) else {
@@ -89,6 +92,7 @@ struct LocalLlamaService {
                 continuation.finish()
             }
         }
+#endif
     }
 
     private func singleDeltaStream(_ text: String) -> AsyncThrowingStream<String, Error> {

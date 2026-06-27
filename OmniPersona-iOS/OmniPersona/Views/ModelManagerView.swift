@@ -16,7 +16,7 @@ private struct ModelManagerContent: View {
 
     var body: some View {
         List {
-            Section("本地模型") {
+            Section {
                 if store.settings.localModels.isEmpty {
                     ContentUnavailableView("还没有本地模型", systemImage: "externaldrive.badge.plus", description: Text("在下方输入 repo id 后下载到设备。"))
                 } else {
@@ -35,9 +35,11 @@ private struct ModelManagerContent: View {
                         }
                     }
                 }
+            } header: {
+                CardEdgeSectionHeader("本地模型")
             }
 
-            Section("下载模型") {
+            Section {
                 TextField("Repo ID", text: $controller.repoID)
                     .textInputAutocapitalization(.never)
                     .textContentType(.URL)
@@ -87,9 +89,11 @@ private struct ModelManagerContent: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            } header: {
+                CardEdgeSectionHeader("下载模型")
             }
 
-            Section("OpenAI 兼容模型") {
+            Section {
                 if store.settings.endpoints.openAIModels.isEmpty {
                     ContentUnavailableView("还没有接口模型", systemImage: "network", description: Text("添加 Base URL、API Key 和模型名后可在聊天中使用。"))
                         .listRowSeparator(.hidden)
@@ -142,6 +146,8 @@ private struct ModelManagerContent: View {
                 } label: {
                     Label("添加接口模型", systemImage: "plus.circle")
                 }
+            } header: {
+                CardEdgeSectionHeader("OpenAI 兼容模型")
             }
         }
         .navigationTitle("模型")
@@ -185,6 +191,22 @@ private struct ModelManagerContent: View {
         return hasSize ? "总大小：\(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))" : "下载这一套"
     }
 
+}
+
+private struct CardEdgeSectionHeader: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 19, weight: .semibold))
+            .foregroundStyle(.primary.opacity(0.86))
+            .textCase(.none)
+            .offset(x: -16)
+    }
 }
 
 private struct OpenAIModelEditorSheet: View {
@@ -328,7 +350,12 @@ private struct DownloadFilePickerRow: View {
     var noneTitle = "不下载"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 58, alignment: .leading)
+
             Menu {
                 if allowsNone {
                     Button(noneTitle) {
@@ -341,30 +368,29 @@ private struct DownloadFilePickerRow: View {
                     }
                 }
             } label: {
-                HStack(spacing: 10) {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text(selectedFile?.displayName ?? noneTitle)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
 
-                    Spacer(minLength: 12)
-
-                    Text(selectedFile?.displayName ?? noneTitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        Text(sizeText)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
 
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-
-            Text(sizeText)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.leading, 1)
         }
     }
 

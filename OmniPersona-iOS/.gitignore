@@ -10,5 +10,4 @@ ThirdParty/llama-src/
 ThirdParty/llama-mtmd/build-*/
 ThirdParty/llama-mtmd/framework-*/
 ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework/
-ThirdParty/mlx-audio-swift-main/
 Models/

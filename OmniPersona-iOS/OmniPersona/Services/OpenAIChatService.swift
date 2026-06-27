@@ -1,9 +1,27 @@
 import Foundation
 
 struct OpenAIChatService {
+    func healthCheck(model: OpenAIModelConfig, settings: AppSettings) async throws {
+        let request = try makeHealthRequest(model: model, settings: settings)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                let (_, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                    throw URLError(.badServerResponse)
+                }
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: 1_000_000_000)
+                throw URLError(.timedOut)
+            }
+            try await group.next()
+            group.cancelAll()
+        }
+    }
+
     func stream(messages: [ChatMessage], settings: AppSettings) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
-            Task {
+            let task = Task {
                 do {
                     let request = try makeRequest(messages: messages, settings: settings)
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
@@ -24,6 +42,9 @@ struct OpenAIChatService {
                 } catch {
                     continuation.finish(throwing: error)
                 }
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
             }
         }
     }
@@ -68,7 +89,7 @@ struct OpenAIChatService {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 300
+        request.timeoutInterval = 8
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -83,6 +104,42 @@ struct OpenAIChatService {
             "stream": settings.generation.streamResponse
         ]
         if sendsThinking {
+            body["enable_thinking"] = settings.generation.enableThinking
+            body["chat_template_kwargs"] = ["enable_thinking": settings.generation.enableThinking]
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return request
+    }
+
+    private func makeHealthRequest(model: OpenAIModelConfig, settings: AppSettings) throws -> URLRequest {
+        let baseURLString = model.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let modelName = model.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !baseURLString.isEmpty, !modelName.isEmpty else { throw URLError(.badURL) }
+
+        let normalized = baseURLString.hasSuffix("/") ? String(baseURLString.dropLast()) : baseURLString
+        let chatURLString = normalized.hasSuffix("/chat/completions")
+            ? normalized
+            : normalized + "/chat/completions"
+        guard let url = URL(string: chatURLString) else { throw URLError(.badURL) }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 1
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !model.apiKey.isEmpty {
+            request.setValue("Bearer \(model.apiKey)", forHTTPHeaderField: "Authorization")
+        }
+
+        var body: [String: Any] = [
+            "model": modelName,
+            "messages": [
+                ["role": "user", "content": "ping"]
+            ],
+            "temperature": 0,
+            "max_tokens": 1,
+            "stream": false
+        ]
+        if model.sendsThinking {
             body["enable_thinking"] = settings.generation.enableThinking
             body["chat_template_kwargs"] = ["enable_thinking": settings.generation.enableThinking]
         }

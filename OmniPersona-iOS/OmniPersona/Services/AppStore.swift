@@ -1,6 +1,17 @@
 import Foundation
 import SwiftUI
 
+enum OpenAIModelHealth: Equatable {
+    case checking
+    case available(Date)
+    case unavailable(String, Date)
+
+    var isAvailable: Bool {
+        if case .available = self { return true }
+        return false
+    }
+}
+
 @MainActor
 final class AppStore: ObservableObject {
     @Published var settings: AppSettings
@@ -13,31 +24,42 @@ final class AppStore: ObservableObject {
     @Published var isPreviewingTTS = false
     @Published var notificationText = ""
     @Published var isTTSEnabled = true
+    @Published var isFirstLaunchSetupRunning: Bool
+    @Published var openAIModelHealth: [UUID: OpenAIModelHealth] = [:]
+    @Published private(set) var hasLoadedPersistedConversations = false
 
     private let chatService = OpenAIChatService()
     private let localService = LocalLlamaService()
-    private let ttsService = TTSService()
     let modelDownloadController = ModelDownloadController()
     let modelDetailDownloadController = ModelDownloadController()
     private var ttsSpeechTask: Task<Void, Never>?
-    private let streamUIFlushInterval: TimeInterval = 0.06
+    private var ttsSpeechTasks: [UUID: Task<Void, Never>] = [:]
+    private var ttsSpeechGeneration = UUID()
+    private var openAIHealthTask: Task<Void, Never>?
+    private var generationTask: Task<Void, Never>?
+    private let maxQueuedTTSSegments = 3
+    private let streamUIFlushInterval: TimeInterval = 0.16
+    private static let firstLaunchSetupKey = "OmniPersona.FirstLaunchSetupCompleted"
+    private static let firstLaunchSetupBuildKey = "OmniPersona.FirstLaunchSetupBuild"
+    private var firstLaunchInterfaceReady = false
+    private lazy var ttsService: TTSService = {
+        let service = TTSService()
+        service.onStatus = { [weak self] message in
+            self?.showNotification(message)
+        }
+        return service
+    }()
 
     init() {
         Self.resetPersistentStateForNewDebugBuildIfNeeded()
+        isFirstLaunchSetupRunning = Self.shouldRunFirstLaunchSetup()
         settings = Persistence.load("settings.json") ?? AppSettings()
-        conversations = Persistence.load("conversations.json") ?? [
+        conversations = [
             Conversation(title: "新的对话", messages: [])
         ]
         selectedConversationID = conversations.first?.id
         migrateDefaults()
-        migrateInstallState()
-        validateLocalModels()
-        ttsService.onStatus = { [weak self] message in
-            self?.showNotification(message)
-        }
-        Task { [weak self] in
-            await self?.prewarmMossOnLaunch()
-        }
+        loadConversationsAfterFirstFrame()
     }
 
     var selectedConversation: Conversation? {
@@ -52,6 +74,23 @@ final class AppStore: ObservableObject {
     var selectedOpenAIModel: OpenAIModelConfig? {
         settings.endpoints.openAIModels.first { $0.id == settings.endpoints.selectedOpenAIModelID }
             ?? settings.endpoints.openAIModels.first
+    }
+
+    var selectedOpenAIHealthStatus: String? {
+        guard settings.endpoints.backend == .openAICompatible,
+              let model = selectedOpenAIModel,
+              let health = openAIModelHealth[model.id]
+        else {
+            return nil
+        }
+        switch health {
+        case .checking:
+            return nil
+        case .available:
+            return nil
+        case .unavailable:
+            return "当前远程模型不可用"
+        }
     }
 
     var localModelDisplayStatus: String {
@@ -85,6 +124,55 @@ final class AppStore: ObservableObject {
             guard self?.notificationText == text else { return }
             self?.notificationText = ""
         }
+    }
+
+    private func loadConversationsAfterFirstFrame() {
+        Task.detached(priority: .utility) { [weak self] in
+            let persisted: [Conversation]? = Persistence.load("conversations.json")
+            await MainActor.run {
+                guard let self else { return }
+                if let persisted, !persisted.isEmpty {
+                    self.conversations = persisted
+                    if let current = self.selectedConversationID,
+                       persisted.contains(where: { $0.id == current }) {
+                        self.hasLoadedPersistedConversations = true
+                        self.completeFirstLaunchSetupIfReady()
+                        return
+                    }
+                    self.selectedConversationID = persisted.first?.id
+                }
+                self.hasLoadedPersistedConversations = true
+                self.completeFirstLaunchSetupIfReady()
+            }
+        }
+    }
+
+    func markFirstLaunchInterfaceReady() {
+        guard !firstLaunchInterfaceReady else { return }
+        firstLaunchInterfaceReady = true
+        completeFirstLaunchSetupIfReady()
+    }
+
+    private func completeFirstLaunchSetupIfReady() {
+        guard isFirstLaunchSetupRunning,
+              firstLaunchInterfaceReady,
+              hasLoadedPersistedConversations
+        else {
+            return
+        }
+        UserDefaults.standard.set(true, forKey: Self.firstLaunchSetupKey)
+        UserDefaults.standard.set(Self.currentInstallFingerprint(), forKey: Self.firstLaunchSetupBuildKey)
+        withAnimation(.snappy(duration: 0.18)) {
+            isFirstLaunchSetupRunning = false
+        }
+    }
+
+    private static func shouldRunFirstLaunchSetup() -> Bool {
+#if DEBUG
+        return UserDefaults.standard.string(forKey: firstLaunchSetupBuildKey) != currentInstallFingerprint()
+#else
+        return !UserDefaults.standard.bool(forKey: firstLaunchSetupKey)
+#endif
     }
 
     func validateLocalModels() {
@@ -189,8 +277,10 @@ final class AppStore: ObservableObject {
         if settings.generation.systemPrompt == "你是一个运行在手机端的多模态语音助手。" {
             settings.generation.systemPrompt = ""
         }
+        settings.tts.presetVoice = TTSPresetVoices.normalizedID(settings.tts.presetVoice)
+        settings.tts.voice = TTSPresetVoices.normalizedID(settings.tts.voice)
         if !TTSPresetVoices.all.contains(where: { $0.id == settings.tts.presetVoice }) {
-            settings.tts.presetVoice = "zh_child_bright"
+            settings.tts.presetVoice = "zh_female_bright"
         }
         if TTSSettings.isDefaultPreviewText(settings.tts.previewText) {
             settings.tts.previewText = TTSSettings.defaultPreviewText(forPresetVoice: settings.tts.presetVoice)
@@ -212,7 +302,7 @@ final class AppStore: ObservableObject {
         let key = "OmniPersona.LastDebugBuildFingerprint"
         let defaults = UserDefaults.standard
         guard defaults.string(forKey: key) != current else { return }
-        Persistence.removeAll()
+        Persistence.removeStateFiles(["settings.json", "conversations.json", "install_state.json"])
         defaults.set(current, forKey: key)
 #endif
     }
@@ -250,6 +340,8 @@ final class AppStore: ObservableObject {
     }
 
     func newConversation() {
+        stopTTS()
+        cancelGeneration()
         let conversation = Conversation(title: "新的对话", messages: [])
         conversations.insert(conversation, at: 0)
         selectedConversationID = conversation.id
@@ -257,6 +349,8 @@ final class AppStore: ObservableObject {
     }
 
     func deleteConversation(_ conversation: Conversation) {
+        stopTTS()
+        cancelGeneration()
         let deletingSelected = selectedConversationID == conversation.id
         conversations.removeAll { $0.id == conversation.id }
         if deletingSelected {
@@ -271,6 +365,8 @@ final class AppStore: ObservableObject {
         else {
             return
         }
+        stopTTS()
+        cancelGeneration()
         var removalRange = messageIndex..<(messageIndex + 1)
         let nextIndex = conversations[conversationIndex].messages.index(after: messageIndex)
         if message.role == .user,
@@ -367,14 +463,44 @@ final class AppStore: ObservableObject {
         settings.endpoints.backend = .openAICompatible
         settings.endpoints.selectedOpenAIModelID = modelID
         save()
+        startSelectedOpenAIHealthCheck(force: true)
     }
 
     func deleteOpenAIModel(_ model: OpenAIModelConfig) {
         settings.endpoints.openAIModels.removeAll { $0.id == model.id }
+        openAIModelHealth[model.id] = nil
         if settings.endpoints.selectedOpenAIModelID == model.id {
             settings.endpoints.selectedOpenAIModelID = settings.endpoints.openAIModels.first?.id
         }
         save()
+    }
+
+    func startSelectedOpenAIHealthCheck(force: Bool = false) {
+        guard settings.endpoints.backend == .openAICompatible,
+              let model = selectedOpenAIModel
+        else {
+            return
+        }
+        if !force, openAIModelHealth[model.id]?.isAvailable == true {
+            return
+        }
+        openAIHealthTask?.cancel()
+        openAIModelHealth[model.id] = .checking
+        let settingsSnapshot = settings
+        openAIHealthTask = Task { [weak self, chatService] in
+            do {
+                try await chatService.healthCheck(model: model, settings: settingsSnapshot)
+                await MainActor.run {
+                    guard let self, self.selectedOpenAIModel?.id == model.id else { return }
+                    self.openAIModelHealth[model.id] = .available(Date())
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self, self.selectedOpenAIModel?.id == model.id else { return }
+                    self.openAIModelHealth[model.id] = .unavailable(error.localizedDescription, Date())
+                }
+            }
+        }
     }
 
     func unloadLocalModelComponent(modelID: UUID, component: LocalModelComponent) {
@@ -436,6 +562,8 @@ final class AppStore: ObservableObject {
 
     func effectiveTTSSettings() -> TTSSettings {
         var tts = settings.tts
+        tts.presetVoice = TTSPresetVoices.normalizedID(tts.presetVoice)
+        tts.voice = TTSPresetVoices.normalizedID(tts.voice)
         guard tts.engine == .mossLocal else {
             return tts
         }
@@ -494,21 +622,54 @@ final class AppStore: ObservableObject {
     }
 
     private func prewarmMossOnLaunch() async {
+        guard settings.tts.engine == .mossLocal else { return }
         guard TTSService.mossCacheExists() else { return }
         await ttsService.prewarmMoss(settings: effectiveTTSSettings())
     }
 
     func stopTTS() {
+        ttsSpeechGeneration = UUID()
         isPreviewingTTS = false
         ttsSpeechTask?.cancel()
         ttsSpeechTask = nil
+        for task in ttsSpeechTasks.values {
+            task.cancel()
+        }
+        ttsSpeechTasks.removeAll()
         ttsService.stopSpeaking()
     }
 
-    func send(text: String, attachments: [ChatAttachment]) async {
+    func setTTSEnabled(_ enabled: Bool) {
+        guard isTTSEnabled != enabled else {
+            if !enabled {
+                stopTTS()
+            }
+            return
+        }
+        isTTSEnabled = enabled
+        if !enabled {
+            stopTTS()
+        }
+    }
+
+    func cancelGeneration() {
+        generationTask?.cancel()
+        generationTask = nil
+        if isGenerating {
+            isGenerating = false
+        }
+        if !statusText.isEmpty &&
+            (statusText.contains("模型") || statusText.contains("生成") || statusText.contains("请求")) {
+            statusText = ""
+        }
+    }
+
+    func send(text: String, attachments: [ChatAttachment]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !attachments.isEmpty else { return }
         guard let index = currentConversationIndex() else { return }
+        stopTTS()
+        cancelGeneration()
 
         let userMessage = ChatMessage(role: .user, text: trimmed, attachments: attachments)
         conversations[index].messages.append(userMessage)
@@ -524,16 +685,12 @@ final class AppStore: ObservableObject {
 
         isGenerating = true
         statusText = "模型请求中..."
-        defer {
-            isGenerating = false
-            statusText = ""
-            save()
+        generationTask = Task { [weak self] in
+            await self?.runGeneration(conversationIndex: index, assistantID: assistantID, latest: userMessage)
         }
-
-        await generateAssistantResponse(conversationIndex: index, assistantID: assistantID, latest: userMessage)
     }
 
-    func resendEditedUserMessage(messageID: UUID, text: String, attachments: [ChatAttachment]) async {
+    func resendEditedUserMessage(messageID: UUID, text: String, attachments: [ChatAttachment]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !attachments.isEmpty else { return }
         guard let conversationIndex = currentConversationIndex(),
@@ -542,6 +699,8 @@ final class AppStore: ObservableObject {
         else {
             return
         }
+        stopTTS()
+        cancelGeneration()
 
         conversations[conversationIndex].messages[messageIndex].text = trimmed
         conversations[conversationIndex].messages[messageIndex].attachments = attachments
@@ -556,18 +715,22 @@ final class AppStore: ObservableObject {
 
         isGenerating = true
         statusText = "重新生成中..."
-        defer {
-            isGenerating = false
-            statusText = ""
-            save()
+        generationTask = Task { [weak self] in
+            await self?.runGeneration(conversationIndex: conversationIndex, assistantID: assistantID, latest: latest)
         }
+    }
 
+    private func runGeneration(conversationIndex: Int, assistantID: UUID, latest: ChatMessage) async {
         await generateAssistantResponse(conversationIndex: conversationIndex, assistantID: assistantID, latest: latest)
+        guard !Task.isCancelled else { return }
+        isGenerating = false
+        statusText = ""
+        generationTask = nil
+        save()
     }
 
     private func generateAssistantResponse(conversationIndex index: Int, assistantID: UUID, latest: ChatMessage) async {
         do {
-            stopTTS()
             validateLocalModels()
             if settings.tts.engine == .mossLocal {
                 await ttsService.prewarmMoss(settings: effectiveTTSSettings())
@@ -585,6 +748,7 @@ final class AppStore: ObservableObject {
                 var lastDisplayFlush = Date.distantPast
                 var speechBuffer = ""
                 for try await delta in localService.stream(messages: history, settings: settings) {
+                    try Task.checkCancellation()
                     response += delta
                     pendingDisplayText += delta
                     flushStreamTextIfNeeded(&pendingDisplayText, assistantID: assistantID, lastFlush: &lastDisplayFlush)
@@ -623,6 +787,7 @@ final class AppStore: ObservableObject {
                 var lastDisplayFlush = Date.distantPast
                 var speechBuffer = ""
                 for try await delta in chatService.stream(messages: history, settings: settings) {
+                    try Task.checkCancellation()
                     response += delta
                     pendingDisplayText += delta
                     flushStreamTextIfNeeded(&pendingDisplayText, assistantID: assistantID, lastFlush: &lastDisplayFlush)
@@ -644,19 +809,40 @@ final class AppStore: ObservableObject {
                     }
                 }
             }
+        } catch is CancellationError {
+            return
         } catch {
-            appendAssistantText("\n\n请求失败：\(error.localizedDescription)", assistantID: assistantID)
+            guard !Task.isCancelled else { return }
+            replaceAssistantText("当前远程模型请求失败，请检查 Base URL、API Key、模型名或网络连接。", assistantID: assistantID)
         }
     }
 
     private func speakInBackground(_ text: String) {
         guard shouldSpeakTTS else { return }
+        guard ttsSpeechTasks.count < maxQueuedTTSSegments else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let segment = String(trimmed.prefix(settings.tts.engine == .mossLocal ? 220 : 420))
+        let generation = ttsSpeechGeneration
         let ttsSettings = effectiveTTSSettings()
         let previousTask = ttsSpeechTask
-        ttsSpeechTask = Task { [ttsService] in
+        let taskID = UUID()
+        let task = Task { [weak self, ttsService] in
             await previousTask?.value
-            guard !Task.isCancelled else { return }
-            await ttsService.speak(text, settings: ttsSettings, waitUntilFinished: true)
+            let canSpeak = await MainActor.run { [weak self] in
+                guard let self else { return false }
+                return self.ttsSpeechGeneration == generation && self.shouldSpeakTTS
+            }
+            guard canSpeak, !Task.isCancelled else { return }
+            await ttsService.speak(segment, settings: ttsSettings, waitUntilFinished: true)
+        }
+        ttsSpeechTask = task
+        ttsSpeechTasks[taskID] = task
+        Task { [weak self] in
+            await task.value
+            await MainActor.run {
+                self?.ttsSpeechTasks[taskID] = nil
+            }
         }
     }
 
@@ -685,20 +871,24 @@ final class AppStore: ObservableObject {
 
     private func appendAssistantText(_ text: String, assistantID: UUID) {
         guard let conversationIndex = currentConversationIndex(),
-              let messageIndex = conversations[conversationIndex].messages.firstIndex(where: { $0.id == assistantID }) else {
+              let messageIndex = conversations[conversationIndex].messages.firstIndex(where: { $0.id == assistantID }),
+              conversations[conversationIndex].messages.indices.contains(messageIndex),
+              conversations[conversationIndex].messages[messageIndex].role == .assistant
+        else {
             return
         }
         conversations[conversationIndex].messages[messageIndex].text += text
-        conversations[conversationIndex].updatedAt = Date()
     }
 
     private func replaceAssistantText(_ text: String, assistantID: UUID) {
         guard let conversationIndex = currentConversationIndex(),
-              let messageIndex = conversations[conversationIndex].messages.firstIndex(where: { $0.id == assistantID }) else {
+              let messageIndex = conversations[conversationIndex].messages.firstIndex(where: { $0.id == assistantID }),
+              conversations[conversationIndex].messages.indices.contains(messageIndex),
+              conversations[conversationIndex].messages[messageIndex].role == .assistant
+        else {
             return
         }
         conversations[conversationIndex].messages[messageIndex].text = text
-        conversations[conversationIndex].updatedAt = Date()
     }
 
     private func requestMessages(for conversation: Conversation, latest: ChatMessage) -> [ChatMessage] {
@@ -756,6 +946,13 @@ enum Persistence {
 
     static func removeAll() {
         try? FileManager.default.removeItem(at: directory())
+    }
+
+    static func removeStateFiles(_ names: [String]) {
+        let base = directory()
+        for name in names {
+            try? FileManager.default.removeItem(at: base.appendingPathComponent(name))
+        }
     }
 }
 

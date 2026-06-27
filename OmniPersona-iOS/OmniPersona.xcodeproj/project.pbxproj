@@ -19,12 +19,10 @@
 		AA000001000000000000000A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002000000000000000A /* SettingsView.swift */; };
 		AA000001000000000000000B /* ModelManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002000000000000000B /* ModelManagerView.swift */; };
 		AA000001000000000000000C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA000002000000000000000C /* Assets.xcassets */; };
-		AA000001000000000000000D /* OPLlamaBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA000002000000000000000F /* OPLlamaBridge.mm */; };
 		AA0000010000000000000010 /* MLXAudioTTS in Frameworks */ = {isa = PBXBuildFile; productRef = AA00000D0000000000000002 /* MLXAudioTTS */; };
 		AA0000010000000000000011 /* MLXAudioCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA00000D0000000000000003 /* MLXAudioCore */; };
 		AA0000010000000000000012 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = AA00000D0000000000000004 /* MLX */; };
 		AA0000010000000000000013 /* MossPresetAudio in Resources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000013 /* MossPresetAudio */; };
-		AA0000010000000000000014 /* ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000014 /* ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -57,10 +55,8 @@
 		AA000002000000000000000E /* OmniPersona.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OmniPersona.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA000002000000000000000F /* OPLlamaBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = OPLlamaBridge.mm; sourceTree = "<group>"; };
 		AA0000020000000000000010 /* OPLlamaBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OPLlamaBridge.h; sourceTree = "<group>"; };
-		AA0000020000000000000011 /* ThirdParty/llama/llama.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ThirdParty/llama/llama.xcframework; sourceTree = SOURCE_ROOT; };
 		AA0000020000000000000012 /* OmniPersona-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "OmniPersona-Bridging-Header.h"; sourceTree = "<group>"; };
 		AA0000020000000000000013 /* MossPresetAudio */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/MossPresetAudio; sourceTree = "<group>"; };
-		AA0000020000000000000014 /* ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,7 +64,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AA0000010000000000000014 /* ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework in Frameworks */,
 				AA0000010000000000000010 /* MLXAudioTTS in Frameworks */,
 				AA0000010000000000000011 /* MLXAudioCore in Frameworks */,
 				AA0000010000000000000012 /* MLX in Frameworks */,
@@ -98,8 +93,6 @@
 				AA0000040000000000000004 /* Services */,
 				AA0000040000000000000005 /* Views */,
 				AA0000040000000000000007 /* Native */,
-				AA0000020000000000000011 /* ThirdParty/llama/llama.xcframework */,
-				AA0000020000000000000014 /* ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework */,
 			);
 			path = OmniPersona;
 			sourceTree = "<group>";
@@ -203,7 +196,7 @@
 			);
 			mainGroup = AA0000040000000000000001;
 			packageReferences = (
-				AA00000C0000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */,
+				AA00000C0000000000000001 /* XCLocalSwiftPackageReference "ThirdParty/mlx-audio-swift-main" */,
 				AA00000C0000000000000002 /* XCRemoteSwiftPackageReference "mlx-swift" */,
 			);
 			productRefGroup = AA0000040000000000000006 /* Products */;
@@ -243,7 +236,6 @@
 				AA0000010000000000000009 /* ChatView.swift in Sources */,
 				AA000001000000000000000A /* SettingsView.swift in Sources */,
 				AA000001000000000000000B /* ModelManagerView.swift in Sources */,
-				AA000001000000000000000D /* OPLlamaBridge.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -369,10 +361,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = SKH29KS6U6;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/ThirdParty/llama-mtmd",
-				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = OmniPersona/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -397,10 +385,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = SKH29KS6U6;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/ThirdParty/llama-mtmd",
-				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = OmniPersona/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -440,15 +424,14 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		AA00000C0000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Blaizzy/mlx-audio-swift.git";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		AA00000C0000000000000001 /* XCLocalSwiftPackageReference "ThirdParty/mlx-audio-swift-main" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "ThirdParty/mlx-audio-swift-main";
 		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
 		AA00000C0000000000000002 /* XCRemoteSwiftPackageReference "mlx-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ml-explore/mlx-swift.git";
@@ -462,12 +445,12 @@
 /* Begin XCSwiftPackageProductDependency section */
 		AA00000D0000000000000002 /* MLXAudioTTS */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA00000C0000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */;
+			package = AA00000C0000000000000001 /* XCLocalSwiftPackageReference "ThirdParty/mlx-audio-swift-main" */;
 			productName = MLXAudioTTS;
 		};
 		AA00000D0000000000000003 /* MLXAudioCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AA00000C0000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */;
+			package = AA00000C0000000000000001 /* XCLocalSwiftPackageReference "ThirdParty/mlx-audio-swift-main" */;
 			productName = MLXAudioCore;
 		};
 		AA00000D0000000000000004 /* MLX */ = {

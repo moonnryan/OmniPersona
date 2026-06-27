@@ -13,13 +13,13 @@ import MLXAudioTTS
 
 @MainActor
 final class TTSService {
-    private let synthesizer = AVSpeechSynthesizer()
+    private lazy var synthesizer = AVSpeechSynthesizer()
     private var mossPlaybackPlayer: AVAudioPlayer?
     private var presetSynthesizers: [String: AVSpeechSynthesizer] = [:]
     var onStatus: ((String) -> Void)?
 #if canImport(MLXAudioTTS) && canImport(MLXAudioCore) && canImport(MLX)
-    private let mlxAudioPlayer = AudioPlayer()
-    private let mossGenerator = MossTTSGenerator()
+    private lazy var mlxAudioPlayer = AudioPlayer()
+    private lazy var mossGenerator = MossTTSGenerator()
     private var mossPlaybackGeneration = UUID()
     private var isMossBusy = false
     private var presetReferenceCache: [String: MLXArray] = [:]
@@ -467,8 +467,8 @@ final class TTSService {
     }
 
     private func presetPitch(for presetID: String) -> Float {
-        switch presetID {
-        case "zh_child_bright": return 1.08
+        switch TTSPresetVoices.normalizedID(presetID) {
+        case "zh_female_bright": return 1.08
         case "ja_female_soft": return 1.04
         default: return 1.0
         }
@@ -530,9 +530,9 @@ final class TTSService {
            !TTSPresetVoices.all.contains(where: { $0.id == custom }) {
             return custom
         }
-        switch settings.presetVoice {
-        case "zh_child_bright": return "Hyacine"
-        case "zh_female_warm": return "Phainon"
+        switch TTSPresetVoices.normalizedID(settings.presetVoice) {
+        case "zh_female_bright": return "Hyacine"
+        case "zh_male_warm": return "Phainon"
         case "en_female_clear": return "Ava"
         case "en_male_story": return "Adam"
         case "ja_female_soft": return "Yui"
@@ -542,7 +542,7 @@ final class TTSService {
     }
 
     private func mossLanguage(for settings: TTSSettings) -> String? {
-        switch settings.presetVoice {
+        switch TTSPresetVoices.normalizedID(settings.presetVoice) {
         case "en_female_clear", "en_male_story": return "en"
         case "ja_female_soft", "ja_male_calm": return "ja"
         default: return "zh"

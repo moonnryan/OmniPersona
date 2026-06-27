@@ -7,12 +7,14 @@ import UIKit
 
 struct ChatView: View {
     @EnvironmentObject private var store: AppStore
+    var sidebarVisible = false
     @State private var draft = ""
     @State private var pickedItems: [PhotosPickerItem] = []
     @State private var attachments: [ChatAttachment] = []
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var showConversationSettings = false
+    @State private var showAttachmentActions = false
     @State private var editingMessage: ChatMessage?
     @State private var showJumpToBottom = false
     @State private var scrollViewportHeight: CGFloat = 0
@@ -21,6 +23,12 @@ struct ChatView: View {
     @State private var messageScrollView: UIScrollView?
     @State private var jumpToBottomTouchActive = false
     @State private var isProgrammaticJumpingToBottom = false
+    @State private var shouldAutoFollowMessages = true
+    @State private var suppressJumpButtonUntilUserScroll = false
+    @State private var scrollToBottomRequest = 0
+    @State private var lastAutoFollowScrollAt = Date.distantPast
+    @State private var composerResetID = UUID()
+    @StateObject private var scrollJumpAnimator = ScrollJumpAnimator()
     @FocusState private var composerFocused: Bool
 
     private let bottomID = "bottom"
@@ -29,6 +37,7 @@ struct ChatView: View {
         ZStack {
             PersonaBackground(profile: conversationProfile)
             messages
+            emptyConversationOverlay
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationBarTitleDisplayMode(.inline)
@@ -70,11 +79,52 @@ struct ChatView: View {
             maxSelectionCount: 4,
             matching: .any(of: [.images, .videos])
         )
+        .onChange(of: pickedItems) {
+            Task { await importPickedItems() }
+        }
         .onChange(of: composerFocused) {
             if !composerFocused {
                 cancelEditingIfUnchanged()
             }
         }
+        .onAppear {
+            store.startSelectedOpenAIHealthCheck(force: true)
+        }
+        .onChange(of: store.settings.endpoints.backend) {
+            store.startSelectedOpenAIHealthCheck(force: true)
+        }
+        .onChange(of: store.settings.endpoints.selectedOpenAIModelID) {
+            store.startSelectedOpenAIHealthCheck(force: true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .omniPersonaCollapseTransientChatUI)) { _ in
+            collapseTransientUI()
+        }
+        .onChange(of: sidebarVisible) {
+            if sidebarVisible {
+                collapseTransientUI()
+            } else {
+                Task { @MainActor in
+                    collapseTransientUI()
+                    try? await Task.sleep(nanoseconds: 120_000_000)
+                    collapseTransientUI()
+                }
+            }
+        }
+        .onDisappear {
+            collapseTransientUI()
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 8)
+                .onChanged { value in
+                    guard value.translation.width > 10,
+                          abs(value.translation.width) > abs(value.translation.height)
+                    else {
+                        return
+                    }
+                    collapseTransientUI()
+                }
+        )
+        .animation(.interactiveSpring(response: 0.34, dampingFraction: 0.78), value: shouldLiftEmptyState)
     }
 
     private var conversationProfile: CharacterProfile {
@@ -85,12 +135,31 @@ struct ChatView: View {
         store.selectedConversation?.messages.last(where: { $0.role == .user })?.id
     }
 
+    private var isConversationEmpty: Bool {
+        store.selectedConversation?.messages.isEmpty ?? true
+    }
+
+    private var isComposerIdle: Bool {
+        draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            attachments.isEmpty &&
+            editingMessage == nil &&
+            !showAttachmentActions &&
+            !store.isGenerating
+    }
+
+    private var shouldLiftEmptyState: Bool {
+        isConversationEmpty && (composerFocused || !isComposerIdle)
+    }
+
     private var headerStatus: String {
         if !store.statusText.isEmpty { return store.statusText }
         switch store.settings.endpoints.backend {
         case .localLlama:
             return store.localModelDisplayStatus
         case .openAICompatible, .remoteOpenAI, .lanOpenAI:
+            if let healthStatus = store.selectedOpenAIHealthStatus {
+                return healthStatus
+            }
             return store.selectedOpenAIModel?.displayTitle ?? "未配置 OpenAI 模型"
         }
     }
@@ -139,7 +208,9 @@ struct ChatView: View {
             }
         } label: {
             Image(systemName: "cpu")
+                .font(.system(size: 16, weight: .semibold))
                 .frame(width: 30, height: 30)
+                .foregroundStyle(.primary)
         }
     }
 
@@ -161,28 +232,44 @@ struct ChatView: View {
     private var ttsToggle: some View {
         let isActive = store.isTTSEnabled && store.settings.tts.engine != .off
         Button {
-            if store.isTTSEnabled {
-                store.isTTSEnabled = false
-                store.stopTTS()
-            } else {
-                store.isTTSEnabled = true
-            }
+            store.setTTSEnabled(!store.isTTSEnabled)
         } label: {
             Image(systemName: isActive ? "speaker.wave.2.fill" : "speaker.slash")
+                .font(.system(size: 16, weight: .semibold))
                 .frame(width: 30, height: 30)
                 .foregroundStyle(isActive ? Color.accentColor : Color.primary)
         }
     }
 
+    @ViewBuilder
     private var messages: some View {
-        ScrollViewReader { proxy in
+        if isConversationEmpty {
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    collapseTransientUI()
+                }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 8)
+                        .onChanged { _ in
+                            collapseTransientUI()
+                        }
+                )
+                .onAppear {
+                    showJumpToBottom = false
+                    messageScrollView = nil
+                    scrollViewportHeight = 0
+                    scrollContentHeight = 0
+                    scrollBottomAnchorY = 0
+                }
+        } else {
+            ScrollViewReader { proxy in
             ZStack(alignment: .bottomTrailing) {
                 ScrollView {
                     VStack(spacing: 12) {
                         let messages = store.selectedConversation?.messages ?? []
-                        if messages.isEmpty {
-                            EmptyChatState()
-                        } else {
+                        if !messages.isEmpty {
                             ForEach(messages) { message in
                                 if !isHiddenDuringEditing(message, in: messages) {
                                     MessageBubble(
@@ -195,6 +282,11 @@ struct ChatView: View {
                                     )
                                     .id(message.id)
                                     .transition(.opacity)
+                                    .transaction { transaction in
+                                        if isStreamingAssistant(message, in: messages) {
+                                            transaction.animation = nil
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -228,14 +320,34 @@ struct ChatView: View {
                 )
                 .background(
                     ScrollViewResolver { scrollView in
-                        messageScrollView = scrollView
+                        if messageScrollView !== scrollView {
+                            messageScrollView = scrollView
+                        }
                         updateJumpToBottomVisibility(from: scrollView)
                     }
                 )
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 2)
+                        .onChanged { value in
+                            guard abs(value.translation.height) > abs(value.translation.width),
+                                  abs(value.translation.height) > 2
+                            else {
+                                return
+                            }
+                            shouldAutoFollowMessages = false
+                            suppressJumpButtonUntilUserScroll = false
+                            updateJumpToBottomVisibility()
+                            Task { @MainActor in
+                                await Task.yield()
+                                updateJumpToBottomVisibility()
+                            }
+                        }
+                )
                 .scrollDismissesKeyboard(.interactively)
                 .onTapGesture {
+                    showAttachmentActions = false
                     composerFocused = false
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    UIApplication.shared.endEditingImmediately()
                 }
                 .onPreferenceChange(ScrollViewportHeightPreferenceKey.self) { value in
                     scrollViewportHeight = value
@@ -250,9 +362,18 @@ struct ChatView: View {
                     updateJumpToBottomVisibility()
                 }
                 .onChange(of: store.selectedConversation?.messages.last?.text) {
-                    if !showJumpToBottom {
-                        scrollToBottom(proxy)
+                    if shouldAutoFollowMessages {
+                        autoFollowToBottom(proxy)
                     }
+                    updateJumpToBottomVisibility()
+                }
+                .onChange(of: store.selectedConversation?.messages.count) {
+                    if shouldAutoFollowMessages {
+                        autoFollowToBottom(proxy, force: true)
+                    }
+                }
+                .onChange(of: scrollToBottomRequest) {
+                    scrollToBottom(proxy)
                 }
                 .onChange(of: editingMessage?.id) {
                     guard let id = editingMessage?.id else { return }
@@ -265,7 +386,7 @@ struct ChatView: View {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 16, weight: .bold))
                         .frame(width: 38, height: 38)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .liquidGlassCircle()
                         .overlay(Circle().stroke(.white.opacity(0.22), lineWidth: 1))
                         .contentShape(Circle())
                         .highPriorityGesture(
@@ -285,6 +406,18 @@ struct ChatView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
+        }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyConversationOverlay: some View {
+        if isConversationEmpty {
+            EmptyChatState()
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .offset(y: shouldLiftEmptyState ? -58 : -18)
+            .allowsHitTesting(false)
         }
     }
 
@@ -319,72 +452,136 @@ struct ChatView: View {
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            HStack(alignment: .center, spacing: 8) {
-                attachmentMenu
-
-                TextField("输入消息", text: $draft, axis: .vertical)
-                    .lineLimit(1...5)
-                    .focused($composerFocused)
-                    .frame(minHeight: 40, alignment: .center)
-                    .padding(.vertical, 6)
-
-                Button {
-                    sendDraft()
-                } label: {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 17, weight: .semibold))
-                        .frame(width: 40, height: 40)
-                        .background(canSend && !store.isGenerating ? Color.accentColor : Color(uiColor: .tertiarySystemFill), in: Circle())
-                        .foregroundStyle(canSend && !store.isGenerating ? .white : .secondary)
+            ZStack(alignment: .bottomLeading) {
+                if showAttachmentActions {
+                    attachmentActionPanel
+                        .offset(x: 0, y: -82)
+                        .transition(.scale(scale: 0.78, anchor: .bottomLeading).combined(with: .opacity))
+                        .zIndex(2)
                 }
-                .buttonStyle(.plain)
-                .disabled(store.isGenerating || !canSend)
+
+                HStack(alignment: .center, spacing: 8) {
+                    attachmentButton
+
+                    TextField("输入消息", text: $draft, axis: .vertical)
+                        .lineLimit(1...5)
+                        .focused($composerFocused)
+                        .id(composerResetID)
+                        .frame(minHeight: 40, alignment: .center)
+                        .padding(.vertical, 6)
+
+                    Button {
+                        sendDraft()
+                    } label: {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(width: 40, height: 40)
+                            .background(canSend && !store.isGenerating ? Color.accentColor : Color(uiColor: .tertiarySystemFill), in: Circle())
+                            .foregroundStyle(canSend && !store.isGenerating ? .white : .secondary)
+                    }
+                    .buttonStyle(LiquidIconButtonStyle())
+                    .disabled(store.isGenerating || !canSend)
+                }
+                .padding(.leading, 8)
+                .padding(.trailing, 8)
+                .padding(.vertical, 8)
+                .liquidGlassCapsule(cornerRadius: 32)
+                .shadow(color: .black.opacity(0.10), radius: 20, y: 9)
+                .scaleEffect(composerScale, anchor: .bottom)
             }
-            .padding(.leading, 8)
-            .padding(.trailing, 8)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(.white.opacity(0.18), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.08), radius: 18, y: 8)
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
-        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+    }
+        .animation(.interactiveSpring(response: 0.34, dampingFraction: 0.58, blendDuration: 0.08), value: showAttachmentActions)
         .animation(.snappy(duration: 0.16), value: attachments)
         .animation(.snappy(duration: 0.16), value: editingMessage?.id)
     }
 
-    private var attachmentMenu: some View {
-        Menu {
-            Button {
-                showPhotoPicker = true
-            } label: {
-                Label("从相册选择", systemImage: "photo.on.rectangle")
-            }
-            Button {
-                showCamera = true
-            } label: {
-                Label("拍照", systemImage: "camera")
+    private var attachmentButton: some View {
+        Button {
+            withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.56, blendDuration: 0.08)) {
+                showAttachmentActions.toggle()
             }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 19, weight: .semibold))
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .contentShape(Circle())
+                .rotationEffect(.degrees(showAttachmentActions ? 45 : 0))
         }
-        .buttonStyle(.plain)
-        .onChange(of: pickedItems) {
-            Task { await importPickedItems() }
+        .buttonStyle(LiquidIconButtonStyle())
+    }
+
+    private var attachmentActionPanel: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            attachmentActionButton(title: "相册", systemImage: "photo.on.rectangle") {
+                showPhotoPicker = true
+            }
+
+            Divider()
+                .opacity(0.32)
+                .padding(.horizontal, 8)
+
+            attachmentActionButton(title: "拍照", systemImage: "camera") {
+                showCamera = true
+            }
         }
+        .padding(7)
+        .frame(width: 132)
+        .frame(minHeight: 112)
+        .liquidGlassCapsule(cornerRadius: 22)
+        .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+    }
+
+    private func attachmentActionButton(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.interactiveSpring(response: 0.24, dampingFraction: 0.76)) {
+                showAttachmentActions = false
+            }
+            action()
+        } label: {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline.weight(.medium))
+                .labelStyle(.titleAndIcon)
+                .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+                .padding(.horizontal, 10)
+                .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        }
+        .buttonStyle(LiquidMenuButtonStyle())
+    }
+
+    private var composerScale: CGFloat {
+        let focusLift: CGFloat = (composerFocused || showAttachmentActions) ? 0.004 : 0
+        return 1 + focusLift
     }
 
     private var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty
     }
 
+    private func autoFollowToBottom(_ proxy: ScrollViewProxy, force: Bool = false) {
+        guard shouldAutoFollowMessages, !isUserControllingMessageScroll else { return }
+        let now = Date()
+        guard force || now.timeIntervalSince(lastAutoFollowScrollAt) >= 0.16 else { return }
+        lastAutoFollowScrollAt = now
+
+        if let scrollView = messageScrollView {
+            let bottomY = max(
+                -scrollView.adjustedContentInset.top,
+                scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
+            )
+            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: bottomY), animated: false)
+            showJumpToBottom = false
+            return
+        }
+
+        proxy.scrollTo(bottomID, anchor: .bottom)
+        showJumpToBottom = false
+    }
+
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        shouldAutoFollowMessages = true
+        suppressJumpButtonUntilUserScroll = true
         isProgrammaticJumpingToBottom = true
         scrollBottomAnchorY = scrollViewportHeight
         withAnimation(.snappy(duration: 0.12)) {
@@ -400,7 +597,6 @@ struct ChatView: View {
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
-            scrollBottomAnchorY = scrollViewportHeight
             isProgrammaticJumpingToBottom = false
             showJumpToBottom = false
         }
@@ -410,22 +606,15 @@ struct ChatView: View {
     private func scrollToBottomWithUIKit() -> Bool {
         guard let scrollView = messageScrollView else { return false }
         guard scrollView.contentSize.height > scrollView.bounds.height + 1 else { return false }
-        scrollView.isScrollEnabled = false
-        scrollView.panGestureRecognizer.isEnabled = false
-        scrollView.panGestureRecognizer.isEnabled = true
-        scrollView.layer.removeAllAnimations()
-        scrollView.setContentOffset(scrollView.contentOffset, animated: false)
-
-        let bottomY = max(
-            -scrollView.adjustedContentInset.top,
-            scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
-        )
-        let target = CGPoint(x: scrollView.contentOffset.x, y: bottomY)
-        scrollView.setContentOffset(target, animated: false)
-        scrollView.isScrollEnabled = true
+        scrollJumpAnimator.scrollToBottom(in: scrollView)
         scrollBottomAnchorY = scrollViewportHeight
         showJumpToBottom = false
         return true
+    }
+
+    private var isUserControllingMessageScroll: Bool {
+        guard let scrollView = messageScrollView else { return false }
+        return scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating
     }
 
     private func updateJumpToBottomVisibility(from scrollView: UIScrollView) {
@@ -433,18 +622,33 @@ struct ChatView: View {
             showJumpToBottom = false
             return
         }
-        let messageCount = store.selectedConversation?.messages.count ?? 0
+        guard !(store.selectedConversation?.messages.isEmpty ?? true) else {
+            showJumpToBottom = false
+            return
+        }
         let maxOffsetY = max(
             -scrollView.adjustedContentInset.top,
             scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
         )
         let distanceFromBottom = max(0, maxOffsetY - scrollView.contentOffset.y)
-        let hasScrollableContent = scrollView.contentSize.height > scrollView.bounds.height + 8 || messageCount > 4
-        let shouldShow = messageCount > 0 && hasScrollableContent && distanceFromBottom > 12
-        guard showJumpToBottom != shouldShow else { return }
-        withAnimation(.snappy(duration: 0.14)) {
-            showJumpToBottom = shouldShow
+        let geometryDistance = max(0, scrollBottomAnchorY - max(scrollViewportHeight, scrollView.bounds.height))
+        let effectiveDistanceFromBottom = max(distanceFromBottom, geometryDistance)
+        let messageCount = store.selectedConversation?.messages.count ?? 0
+        let hasScrollableContent = scrollView.contentSize.height > scrollView.bounds.height + 8 ||
+            scrollContentHeight > scrollViewportHeight + 8 ||
+            messageCount > 4
+        let shouldShow = messageCount > 0 && hasScrollableContent && effectiveDistanceFromBottom > 12
+        if suppressJumpButtonUntilUserScroll && effectiveDistanceFromBottom <= 12 {
+            showJumpToBottom = false
+            return
         }
+        if effectiveDistanceFromBottom <= 12 {
+            shouldAutoFollowMessages = true
+        } else if isUserControllingMessageScroll || shouldShow {
+            shouldAutoFollowMessages = false
+        }
+        guard showJumpToBottom != shouldShow else { return }
+        showJumpToBottom = shouldShow
     }
 
     private func updateJumpToBottomVisibility() {
@@ -456,40 +660,66 @@ struct ChatView: View {
             showJumpToBottom = false
             return
         }
-        let messageCount = store.selectedConversation?.messages.count ?? 0
+        guard !(store.selectedConversation?.messages.isEmpty ?? true) else {
+            showJumpToBottom = false
+            return
+        }
         let viewport = max(scrollViewportHeight, 0)
         let content = max(scrollContentHeight, 0)
+        let messageCount = store.selectedConversation?.messages.count ?? 0
         let hasScrollableContent = content > viewport + 8 || messageCount > 4
         let distanceFromBottom = max(0, scrollBottomAnchorY - viewport)
         let shouldShow = messageCount > 0 && hasScrollableContent && distanceFromBottom > 8
-        guard showJumpToBottom != shouldShow else { return }
-        withAnimation(.snappy(duration: 0.14)) {
-            showJumpToBottom = shouldShow
+        if suppressJumpButtonUntilUserScroll && distanceFromBottom <= 8 {
+            showJumpToBottom = false
+            return
         }
+        if distanceFromBottom <= 8 {
+            shouldAutoFollowMessages = true
+        } else if shouldShow {
+            shouldAutoFollowMessages = false
+        }
+        guard showJumpToBottom != shouldShow else { return }
+        showJumpToBottom = shouldShow
     }
 
     private func sendDraft() {
         let text = draft
         let sendingAttachments = attachments
         let messageToEdit = editingMessage
+        shouldAutoFollowMessages = true
+        suppressJumpButtonUntilUserScroll = true
+        lastAutoFollowScrollAt = .distantPast
         draft = ""
         attachments = []
         pickedItems = []
+        showAttachmentActions = false
         editingMessage = nil
         composerFocused = false
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        composerResetID = UUID()
+        UIApplication.shared.endEditingImmediately()
 
-        Task {
-            if let messageToEdit {
-                await store.resendEditedUserMessage(messageID: messageToEdit.id, text: text, attachments: sendingAttachments)
-            } else {
-                await store.send(text: text, attachments: sendingAttachments)
-            }
+        if let messageToEdit {
+            store.resendEditedUserMessage(messageID: messageToEdit.id, text: text, attachments: sendingAttachments)
+        } else {
+            store.send(text: text, attachments: sendingAttachments)
         }
+        Task { @MainActor in
+            await Task.yield()
+            scrollToBottomRequest += 1
+        }
+    }
+
+    private func collapseTransientUI() {
+        showAttachmentActions = false
+        composerFocused = false
+        composerResetID = UUID()
+        UIApplication.shared.endEditingImmediately()
     }
 
     private func beginEditing(_ message: ChatMessage) {
         guard message.role == .user, message.id == latestUserMessageID else { return }
+        store.stopTTS()
         editingMessage = message
         draft = message.text
         attachments = message.attachments
@@ -611,14 +841,40 @@ private struct AttachmentPreview: View {
     }
 }
 
+private struct LiquidIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.84 : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.58), value: configuration.isPressed)
+    }
+}
+
+private struct LiquidMenuButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.14 : 0.001))
+            )
+            .scaleEffect(configuration.isPressed ? 0.96 : 1, anchor: .center)
+            .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.62), value: configuration.isPressed)
+    }
+}
+
 private struct ScrollViewResolver: UIViewRepresentable {
     let onResolve: (UIScrollView) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView(frame: .zero)
         view.isUserInteractionEnabled = false
         DispatchQueue.main.async {
             if let scrollView = view.enclosingVerticalScrollView {
+                context.coordinator.observe(scrollView, onResolve: onResolve)
                 onResolve(scrollView)
             }
         }
@@ -628,8 +884,141 @@ private struct ScrollViewResolver: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {
         DispatchQueue.main.async {
             if let scrollView = uiView.enclosingVerticalScrollView {
+                context.coordinator.observe(scrollView, onResolve: onResolve)
                 onResolve(scrollView)
             }
+        }
+    }
+
+    final class Coordinator: NSObject {
+        private weak var observedScrollView: UIScrollView?
+        private var displayLink: CADisplayLink?
+        private var onResolve: ((UIScrollView) -> Void)?
+        private var lastSampleTime: CFTimeInterval = 0
+        private var lastOffsetY: CGFloat = .greatestFiniteMagnitude
+        private var lastContentHeight: CGFloat = .greatestFiniteMagnitude
+        private var lastBoundsHeight: CGFloat = .greatestFiniteMagnitude
+
+        func observe(_ scrollView: UIScrollView, onResolve: @escaping (UIScrollView) -> Void) {
+            self.onResolve = onResolve
+            guard observedScrollView !== scrollView else { return }
+            observedScrollView = scrollView
+            lastOffsetY = .greatestFiniteMagnitude
+            lastContentHeight = .greatestFiniteMagnitude
+            lastBoundsHeight = .greatestFiniteMagnitude
+            displayLink?.invalidate()
+            let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        }
+
+        @MainActor
+        @objc private func tick(_ link: CADisplayLink) {
+            guard link.timestamp - lastSampleTime >= 0.10,
+                  let scrollView = observedScrollView
+            else {
+                return
+            }
+            lastSampleTime = link.timestamp
+            let offsetY = scrollView.contentOffset.y
+            let contentHeight = scrollView.contentSize.height
+            let boundsHeight = scrollView.bounds.height
+            guard abs(offsetY - lastOffsetY) > 0.5 ||
+                    abs(contentHeight - lastContentHeight) > 0.5 ||
+                    abs(boundsHeight - lastBoundsHeight) > 0.5
+            else {
+                return
+            }
+            lastOffsetY = offsetY
+            lastContentHeight = contentHeight
+            lastBoundsHeight = boundsHeight
+            onResolve?(scrollView)
+        }
+
+        deinit {
+            displayLink?.invalidate()
+        }
+    }
+}
+
+@MainActor
+private final class ScrollJumpAnimator: NSObject, ObservableObject {
+    private weak var scrollView: UIScrollView?
+    private var displayLink: CADisplayLink?
+    private var startY: CGFloat = 0
+    private var targetY: CGFloat = 0
+    private var startTime: CFTimeInterval = 0
+    private var duration: CFTimeInterval = 0.22
+    private var restoreScrollEnabled = true
+
+    func scrollToBottom(in scrollView: UIScrollView) {
+        let bottomY = max(
+            -scrollView.adjustedContentInset.top,
+            scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
+        )
+        scroll(to: bottomY, in: scrollView)
+    }
+
+    private func scroll(to targetY: CGFloat, in scrollView: UIScrollView) {
+        stop()
+        self.scrollView = scrollView
+        self.startY = scrollView.contentOffset.y
+        self.targetY = targetY
+        self.startTime = CACurrentMediaTime()
+        self.restoreScrollEnabled = scrollView.isScrollEnabled
+
+        haltActiveScroll(in: scrollView)
+
+        guard abs(targetY - startY) > 1 else {
+            finish(at: targetY)
+            return
+        }
+
+        let distance = abs(targetY - startY)
+        duration = min(0.32, max(0.16, CFTimeInterval(distance / 1800)))
+        let link = CADisplayLink(target: self, selector: #selector(step(_:)))
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    private func haltActiveScroll(in scrollView: UIScrollView) {
+        scrollView.layer.removeAllAnimations()
+        scrollView.subviews.forEach { $0.layer.removeAllAnimations() }
+        scrollView.setContentOffset(scrollView.contentOffset, animated: false)
+        scrollView.panGestureRecognizer.isEnabled = false
+        scrollView.panGestureRecognizer.isEnabled = true
+        scrollView.isScrollEnabled = false
+    }
+
+    @objc private func step(_ link: CADisplayLink) {
+        guard let scrollView else {
+            stop()
+            return
+        }
+
+        let progress = min(1, max(0, (CACurrentMediaTime() - startTime) / duration))
+        let eased = 1 - pow(1 - progress, 3)
+        let nextY = startY + (targetY - startY) * CGFloat(eased)
+        scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: nextY), animated: false)
+
+        if progress >= 1 {
+            finish(at: targetY)
+        }
+    }
+
+    private func finish(at offsetY: CGFloat) {
+        displayLink?.invalidate()
+        displayLink = nil
+        guard let scrollView else { return }
+        scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: offsetY), animated: false)
+        scrollView.isScrollEnabled = restoreScrollEnabled
+    }
+
+    private func stop() {
+        displayLink?.invalidate()
+        displayLink = nil
+        if let scrollView {
+            scrollView.isScrollEnabled = restoreScrollEnabled
         }
     }
 }
@@ -648,7 +1037,7 @@ private extension View {
     @ViewBuilder
     func liquidGlassCapsule(cornerRadius: CGFloat) -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+            glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
         } else {
             background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -663,7 +1052,7 @@ private extension View {
     @ViewBuilder
     func liquidGlassCircle() -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular, in: .circle)
+            glassEffect(.regular.interactive(), in: .circle)
         } else {
             background(.ultraThinMaterial, in: Circle())
         }
@@ -739,7 +1128,7 @@ private struct MessageBubble: View {
             if !message.text.isEmpty || message.attachments.isEmpty {
                 MarkdownMessageText(text: message.text.isEmpty ? "..." : message.text)
                     .font(.body)
-                    .textSelection(.enabled)
+                    .selectableText(!isStreaming)
                     .markdownEnabled(!isStreaming)
                     .multilineTextAlignment(.leading)
                     .frame(width: bubbleContentWidth, alignment: .leading)
@@ -773,7 +1162,12 @@ private struct MessageBubble: View {
         let thumbnailBound = min(attachmentStripWidth, maxWidth)
         let text = message.text.isEmpty && message.attachments.isEmpty ? "..." : message.text
         let minTextWidth: CGFloat = message.role == .assistant ? 128 : 48
-        let textWidth = estimatedTextWidth(text, minWidth: minTextWidth, maxWidth: maxWidth, role: message.role)
+        let textWidth: CGFloat
+        if message.role == .assistant && (isStreaming || text.count > 80) {
+            textWidth = maxWidth
+        } else {
+            textWidth = estimatedTextWidth(text, minWidth: minTextWidth, maxWidth: maxWidth, role: message.role)
+        }
 
         guard !message.attachments.isEmpty else {
             return textWidth
@@ -931,6 +1325,15 @@ private extension View {
     func markdownEnabled(_ enabled: Bool) -> some View {
         environment(\.markdownEnabled, enabled)
     }
+
+    @ViewBuilder
+    func selectableText(_ enabled: Bool) -> some View {
+        if enabled {
+            textSelection(.enabled)
+        } else {
+            self
+        }
+    }
 }
 
 private struct MessageAttachmentThumbnail: View {
@@ -989,12 +1392,12 @@ private struct EmptyChatState: View {
                 .foregroundStyle(.secondary)
             Text("开始一段对话")
                 .font(.headline)
-            Text("底部输入文字，或用左侧加号添加图片。")
+            Text("输入文字，或用左侧加号添加图片。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity, minHeight: 260)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -1030,12 +1433,12 @@ private struct PersonaBackground: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
+                Color(uiColor: .systemBackground)
+
                 if let path = profile.backgroundVideoPath,
                    FileManager.default.fileExists(atPath: path) {
                     LoopingMutedVideoView(url: URL(fileURLWithPath: path))
                         .frame(width: geometry.size.width, height: geometry.size.height)
-                } else {
-                    Color(uiColor: .systemBackground)
                 }
 
                 if let path = profile.backgroundImagePath,
@@ -1288,6 +1691,7 @@ private final class CameraViewController: UIViewController, @preconcurrency AVCa
     private var shutterButton: UIButton?
     private var reviewImageView: UIImageView?
     private var reviewControls: UIStackView?
+    private var focusIndicator: UIView?
     private var capturedImage: UIImage?
 
     init(onImage: @escaping (UIImage) -> Void, onCancel: @escaping () -> Void) {
@@ -1329,6 +1733,9 @@ private final class CameraViewController: UIViewController, @preconcurrency AVCa
         layer.frame = view.bounds
         view.layer.addSublayer(layer)
         previewLayer = layer
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(focusTapped(_:)))
+        view.addGestureRecognizer(tap)
     }
 
     private func configureControls() {
@@ -1341,10 +1748,9 @@ private final class CameraViewController: UIViewController, @preconcurrency AVCa
 
         let shutterButton = UIButton(type: .system)
         shutterButton.translatesAutoresizingMaskIntoConstraints = false
-        shutterButton.backgroundColor = .white
-        shutterButton.layer.cornerRadius = 35
-        shutterButton.layer.borderWidth = 4
-        shutterButton.layer.borderColor = UIColor.white.withAlphaComponent(0.45).cgColor
+        shutterButton.backgroundColor = .clear
+        shutterButton.layer.cornerRadius = 38
+        shutterButton.addShutterGlass()
         shutterButton.addTarget(self, action: #selector(capturePhoto), for: .touchUpInside)
         self.shutterButton = shutterButton
 
@@ -1380,8 +1786,8 @@ private final class CameraViewController: UIViewController, @preconcurrency AVCa
 
             shutterButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             shutterButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -28),
-            shutterButton.widthAnchor.constraint(equalToConstant: 70),
-            shutterButton.heightAnchor.constraint(equalToConstant: 70),
+            shutterButton.widthAnchor.constraint(equalToConstant: 76),
+            shutterButton.heightAnchor.constraint(equalToConstant: 76),
 
             reviewControls.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 18),
             reviewControls.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -18),
@@ -1393,11 +1799,14 @@ private final class CameraViewController: UIViewController, @preconcurrency AVCa
     private func makeCircleButton(systemName: String) -> UIButton {
         let button = UIButton(type: .system)
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.setImage(UIImage(systemName: systemName), for: .normal)
+        var configuration = UIButton.Configuration.filled()
+        configuration.image = UIImage(systemName: systemName)
+        configuration.cornerStyle = .capsule
+        configuration.baseForegroundColor = .white
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.24)
+        configuration.background.visualEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+        button.configuration = configuration
         button.tintColor = .white
-        button.backgroundColor = UIColor.black.withAlphaComponent(0.42)
-        button.layer.cornerRadius = 22
-        button.clipsToBounds = true
         return button
     }
 
@@ -1407,8 +1816,9 @@ private final class CameraViewController: UIViewController, @preconcurrency AVCa
         configuration.image = UIImage(systemName: imageName)
         configuration.imagePadding = 7
         configuration.cornerStyle = .capsule
-        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.58)
+        configuration.baseBackgroundColor = UIColor.black.withAlphaComponent(0.24)
         configuration.baseForegroundColor = tint == .systemBlue ? .white : tint
+        configuration.background.visualEffect = UIBlurEffect(style: .systemUltraThinMaterial)
 
         let button = UIButton(configuration: configuration)
         button.translatesAutoresizingMaskIntoConstraints = false
@@ -1449,7 +1859,44 @@ private final class CameraViewController: UIViewController, @preconcurrency AVCa
     @objc private func toggleFlash(_ sender: UIButton) {
         isFlashOn.toggle()
         sender.setImage(UIImage(systemName: isFlashOn ? "bolt.fill" : "bolt.slash"), for: .normal)
-        sender.tintColor = isFlashOn ? .systemYellow : .white
+        var configuration = sender.configuration
+        configuration?.image = UIImage(systemName: isFlashOn ? "bolt.fill" : "bolt.slash")
+        configuration?.baseForegroundColor = isFlashOn ? .systemYellow : .white
+        sender.configuration = configuration
+    }
+
+    @objc private func focusTapped(_ recognizer: UITapGestureRecognizer) {
+        guard capturedImage == nil,
+              let previewLayer
+        else { return }
+        let point = recognizer.location(in: view)
+        let devicePoint = previewLayer.captureDevicePointConverted(fromLayerPoint: point)
+        cameraSession.focus(at: devicePoint)
+        showFocusIndicator(at: point)
+    }
+
+    private func showFocusIndicator(at point: CGPoint) {
+        focusIndicator?.removeFromSuperview()
+        let indicator = UIView(frame: CGRect(x: 0, y: 0, width: 74, height: 74))
+        indicator.center = point
+        indicator.layer.borderWidth = 1.8
+        indicator.layer.borderColor = UIColor.systemYellow.cgColor
+        indicator.layer.cornerRadius = 12
+        indicator.backgroundColor = UIColor.clear
+        indicator.alpha = 0
+        view.addSubview(indicator)
+        focusIndicator = indicator
+
+        UIView.animate(withDuration: 0.16, delay: 0, options: [.curveEaseOut]) {
+            indicator.alpha = 1
+            indicator.transform = CGAffineTransform(scaleX: 0.78, y: 0.78)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.32, delay: 0.45, options: [.curveEaseIn]) {
+                indicator.alpha = 0
+            } completion: { [weak indicator] _ in
+                indicator?.removeFromSuperview()
+            }
+        }
     }
 
     @objc private func capturePhoto() {
@@ -1523,6 +1970,7 @@ private final class CameraSession: @unchecked Sendable {
     let session = AVCaptureSession()
     let output = AVCapturePhotoOutput()
     private var isConfigured = false
+    private var videoDevice: AVCaptureDevice?
 
     func configureAndStart() -> Bool {
         if isConfigured {
@@ -1545,6 +1993,7 @@ private final class CameraSession: @unchecked Sendable {
         session.addInput(input)
         session.addOutput(output)
         session.commitConfiguration()
+        videoDevice = camera
         isConfigured = true
         startRunning()
         return true
@@ -1560,5 +2009,63 @@ private final class CameraSession: @unchecked Sendable {
         if session.isRunning {
             session.stopRunning()
         }
+    }
+
+    func focus(at point: CGPoint) {
+        guard let device = videoDevice else { return }
+        do {
+            try device.lockForConfiguration()
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = point
+                if device.isFocusModeSupported(.autoFocus) {
+                    device.focusMode = .autoFocus
+                }
+            }
+            if device.isExposurePointOfInterestSupported {
+                device.exposurePointOfInterest = point
+                if device.isExposureModeSupported(.continuousAutoExposure) {
+                    device.exposureMode = .continuousAutoExposure
+                }
+            }
+            device.unlockForConfiguration()
+        } catch {
+            return
+        }
+    }
+}
+
+private extension UIButton {
+    func addShutterGlass() {
+        let outer = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+        outer.translatesAutoresizingMaskIntoConstraints = false
+        outer.isUserInteractionEnabled = false
+        outer.layer.cornerRadius = 38
+        outer.clipsToBounds = true
+        outer.contentView.backgroundColor = UIColor.white.withAlphaComponent(0.10)
+        addSubview(outer)
+
+        let inner = UIView()
+        inner.translatesAutoresizingMaskIntoConstraints = false
+        inner.isUserInteractionEnabled = false
+        inner.backgroundColor = UIColor.white.withAlphaComponent(0.92)
+        inner.layer.cornerRadius = 28
+        inner.layer.borderWidth = 1
+        inner.layer.borderColor = UIColor.white.withAlphaComponent(0.75).cgColor
+        addSubview(inner)
+
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = 0.18
+        layer.shadowRadius = 16
+        layer.shadowOffset = CGSize(width: 0, height: 6)
+        NSLayoutConstraint.activate([
+            outer.leadingAnchor.constraint(equalTo: leadingAnchor),
+            outer.trailingAnchor.constraint(equalTo: trailingAnchor),
+            outer.topAnchor.constraint(equalTo: topAnchor),
+            outer.bottomAnchor.constraint(equalTo: bottomAnchor),
+            inner.centerXAnchor.constraint(equalTo: centerXAnchor),
+            inner.centerYAnchor.constraint(equalTo: centerYAnchor),
+            inner.widthAnchor.constraint(equalToConstant: 56),
+            inner.heightAnchor.constraint(equalToConstant: 56)
+        ])
     }
 }
