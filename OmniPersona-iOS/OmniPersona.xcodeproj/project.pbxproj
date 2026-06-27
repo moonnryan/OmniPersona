@@ -1,0 +1,481 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA0000010000000000000001 /* OmniPersonaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000001 /* OmniPersonaApp.swift */; };
+		AA0000010000000000000002 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000002 /* AppModels.swift */; };
+		AA0000010000000000000003 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000003 /* AppStore.swift */; };
+		AA0000010000000000000004 /* OpenAIChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000004 /* OpenAIChatService.swift */; };
+		AA0000010000000000000005 /* LocalLlamaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000005 /* LocalLlamaService.swift */; };
+		AA0000010000000000000006 /* ModelHubService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000006 /* ModelHubService.swift */; };
+		AA0000010000000000000007 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000007 /* TTSService.swift */; };
+		AA0000010000000000000008 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000008 /* ContentView.swift */; };
+		AA0000010000000000000009 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000009 /* ChatView.swift */; };
+		AA000001000000000000000A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002000000000000000A /* SettingsView.swift */; };
+		AA000001000000000000000B /* ModelManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002000000000000000B /* ModelManagerView.swift */; };
+		AA000001000000000000000C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA000002000000000000000C /* Assets.xcassets */; };
+		AA000001000000000000000D /* OPLlamaBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA000002000000000000000F /* OPLlamaBridge.mm */; };
+		AA0000010000000000000010 /* MLXAudioTTS in Frameworks */ = {isa = PBXBuildFile; productRef = AA00000D0000000000000002 /* MLXAudioTTS */; };
+		AA0000010000000000000011 /* MLXAudioCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA00000D0000000000000003 /* MLXAudioCore */; };
+		AA0000010000000000000012 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = AA00000D0000000000000004 /* MLX */; };
+		AA0000010000000000000013 /* MossPresetAudio in Resources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000013 /* MossPresetAudio */; };
+		AA0000010000000000000014 /* ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000014 /* ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		AA00000B0000000000000001 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		AA0000020000000000000001 /* OmniPersonaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OmniPersonaApp.swift; sourceTree = "<group>"; };
+		AA0000020000000000000002 /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
+		AA0000020000000000000003 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		AA0000020000000000000004 /* OpenAIChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIChatService.swift; sourceTree = "<group>"; };
+		AA0000020000000000000005 /* LocalLlamaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLlamaService.swift; sourceTree = "<group>"; };
+		AA0000020000000000000006 /* ModelHubService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelHubService.swift; sourceTree = "<group>"; };
+		AA0000020000000000000007 /* TTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSService.swift; sourceTree = "<group>"; };
+		AA0000020000000000000008 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		AA0000020000000000000009 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		AA000002000000000000000A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		AA000002000000000000000B /* ModelManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManagerView.swift; sourceTree = "<group>"; };
+		AA000002000000000000000C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA000002000000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA000002000000000000000E /* OmniPersona.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OmniPersona.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA000002000000000000000F /* OPLlamaBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = OPLlamaBridge.mm; sourceTree = "<group>"; };
+		AA0000020000000000000010 /* OPLlamaBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OPLlamaBridge.h; sourceTree = "<group>"; };
+		AA0000020000000000000011 /* ThirdParty/llama/llama.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ThirdParty/llama/llama.xcframework; sourceTree = SOURCE_ROOT; };
+		AA0000020000000000000012 /* OmniPersona-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "OmniPersona-Bridging-Header.h"; sourceTree = "<group>"; };
+		AA0000020000000000000013 /* MossPresetAudio */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/MossPresetAudio; sourceTree = "<group>"; };
+		AA0000020000000000000014 /* ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA0000030000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0000010000000000000014 /* ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework in Frameworks */,
+				AA0000010000000000000010 /* MLXAudioTTS in Frameworks */,
+				AA0000010000000000000011 /* MLXAudioCore in Frameworks */,
+				AA0000010000000000000012 /* MLX in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA0000040000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				AA0000040000000000000002 /* OmniPersona */,
+				AA0000040000000000000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA0000040000000000000002 /* OmniPersona */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000020000000000000001 /* OmniPersonaApp.swift */,
+				AA0000020000000000000012 /* OmniPersona-Bridging-Header.h */,
+				AA000002000000000000000D /* Info.plist */,
+				AA000002000000000000000C /* Assets.xcassets */,
+				AA0000020000000000000013 /* MossPresetAudio */,
+				AA0000040000000000000003 /* Models */,
+				AA0000040000000000000004 /* Services */,
+				AA0000040000000000000005 /* Views */,
+				AA0000040000000000000007 /* Native */,
+				AA0000020000000000000011 /* ThirdParty/llama/llama.xcframework */,
+				AA0000020000000000000014 /* ThirdParty/llama-mtmd/OmniLlamaMtmd.xcframework */,
+			);
+			path = OmniPersona;
+			sourceTree = "<group>";
+		};
+		AA0000040000000000000003 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000020000000000000002 /* AppModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		AA0000040000000000000004 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000020000000000000003 /* AppStore.swift */,
+				AA0000020000000000000004 /* OpenAIChatService.swift */,
+				AA0000020000000000000005 /* LocalLlamaService.swift */,
+				AA0000020000000000000006 /* ModelHubService.swift */,
+				AA0000020000000000000007 /* TTSService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		AA0000040000000000000005 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000020000000000000008 /* ContentView.swift */,
+				AA0000020000000000000009 /* ChatView.swift */,
+				AA000002000000000000000A /* SettingsView.swift */,
+				AA000002000000000000000B /* ModelManagerView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		AA0000040000000000000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA000002000000000000000E /* OmniPersona.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AA0000040000000000000007 /* Native */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000020000000000000010 /* OPLlamaBridge.h */,
+				AA000002000000000000000F /* OPLlamaBridge.mm */,
+			);
+			path = Native;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA0000050000000000000001 /* OmniPersona */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA0000090000000000000002 /* Build configuration list for PBXNativeTarget "OmniPersona" */;
+			buildPhases = (
+				AA0000060000000000000001 /* Sources */,
+				AA0000030000000000000001 /* Frameworks */,
+				AA0000070000000000000001 /* Resources */,
+				AA00000B0000000000000001 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = OmniPersona;
+			packageProductDependencies = (
+				AA00000D0000000000000002 /* MLXAudioTTS */,
+				AA00000D0000000000000003 /* MLXAudioCore */,
+				AA00000D0000000000000004 /* MLX */,
+			);
+			productName = OmniPersona;
+			productReference = AA000002000000000000000E /* OmniPersona.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA0000080000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2650;
+				LastUpgradeCheck = 2650;
+				TargetAttributes = {
+					AA0000050000000000000001 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+				};
+			};
+			buildConfigurationList = AA0000090000000000000001 /* Build configuration list for PBXProject "OmniPersona" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA0000040000000000000001;
+			packageReferences = (
+				AA00000C0000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */,
+				AA00000C0000000000000002 /* XCRemoteSwiftPackageReference "mlx-swift" */,
+			);
+			productRefGroup = AA0000040000000000000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA0000050000000000000001 /* OmniPersona */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA0000070000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000001000000000000000C /* Assets.xcassets in Resources */,
+				AA0000010000000000000013 /* MossPresetAudio in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA0000060000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0000010000000000000001 /* OmniPersonaApp.swift in Sources */,
+				AA0000010000000000000002 /* AppModels.swift in Sources */,
+				AA0000010000000000000003 /* AppStore.swift in Sources */,
+				AA0000010000000000000004 /* OpenAIChatService.swift in Sources */,
+				AA0000010000000000000005 /* LocalLlamaService.swift in Sources */,
+				AA0000010000000000000006 /* ModelHubService.swift in Sources */,
+				AA0000010000000000000007 /* TTSService.swift in Sources */,
+				AA0000010000000000000008 /* ContentView.swift in Sources */,
+				AA0000010000000000000009 /* ChatView.swift in Sources */,
+				AA000001000000000000000A /* SettingsView.swift in Sources */,
+				AA000001000000000000000B /* ModelManagerView.swift in Sources */,
+				AA000001000000000000000D /* OPLlamaBridge.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA00000A0000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		AA00000A0000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES_AGGRESSIVE;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		AA00000A0000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = SKH29KS6U6;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ThirdParty/llama-mtmd",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OmniPersona/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.local.OmniPersona;
+				PRODUCT_NAME = OmniPersona;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "OmniPersona/OmniPersona-Bridging-Header.h";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA00000A0000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = SKH29KS6U6;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ThirdParty/llama-mtmd",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OmniPersona/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.local.OmniPersona;
+				PRODUCT_NAME = OmniPersona;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "OmniPersona/OmniPersona-Bridging-Header.h";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA0000090000000000000001 /* Build configuration list for PBXProject "OmniPersona" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00000A0000000000000001 /* Debug */,
+				AA00000A0000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA0000090000000000000002 /* Build configuration list for PBXNativeTarget "OmniPersona" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00000A0000000000000003 /* Debug */,
+				AA00000A0000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA00000C0000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Blaizzy/mlx-audio-swift.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		AA00000C0000000000000002 /* XCRemoteSwiftPackageReference "mlx-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.30.6;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA00000D0000000000000002 /* MLXAudioTTS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA00000C0000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */;
+			productName = MLXAudioTTS;
+		};
+		AA00000D0000000000000003 /* MLXAudioCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA00000C0000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */;
+			productName = MLXAudioCore;
+		};
+		AA00000D0000000000000004 /* MLX */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA00000C0000000000000002 /* XCRemoteSwiftPackageReference "mlx-swift" */;
+			productName = MLX;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = AA0000080000000000000001 /* Project object */;
+}
